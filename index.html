@@ -1,0 +1,454 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#07111f" />
+    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%23ffc947'/%3E%3Ctext x='8' y='43' font-family='Arial' font-size='26' font-weight='900' fill='%2307111f'%3EG1%3C/text%3E%3C/svg%3E" />
+    <title>G1 PRIME // 1:1 3D Viewer</title>
+    <style>
+      :root {
+        --bg: #070c14;
+        --panel: rgba(10, 18, 30, 0.78);
+        --panel-solid: #0d1726;
+        --line: rgba(180, 205, 226, 0.16);
+        --muted: #8190a4;
+        --text: #e8f0f8;
+        --cyan: #66d7ed;
+        --red: #e74b3c;
+        --yellow: #ffc947;
+      }
+
+      * { box-sizing: border-box; }
+      html, body { height: 100%; }
+      body {
+        margin: 0;
+        overflow: hidden;
+        color: var(--text);
+        background:
+          radial-gradient(circle at 70% 18%, rgba(39, 111, 151, 0.13), transparent 32%),
+          radial-gradient(circle at 22% 80%, rgba(181, 47, 39, 0.10), transparent 36%),
+          var(--bg);
+        font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      }
+
+      #app, #viewport { position: relative; width: 100%; height: 100%; }
+      #viewport { position: absolute; inset: 0; }
+      canvas { display: block; width: 100%; height: 100%; }
+
+      .hud {
+        position: absolute;
+        inset: 0;
+        pointer-events: none;
+        display: flex;
+        flex-direction: column;
+        justify-content: space-between;
+        padding: 24px 28px 22px;
+      }
+
+      .topbar, .bottombar { display: flex; align-items: flex-start; justify-content: space-between; gap: 20px; }
+      .brand { display: flex; align-items: center; gap: 12px; }
+      .brand-mark {
+        width: 36px; height: 36px; border-radius: 10px;
+        display: grid; place-items: center;
+        color: #08111b; background: var(--yellow);
+        font-weight: 900; letter-spacing: -0.08em;
+        box-shadow: 0 0 25px rgba(255, 201, 71, 0.24);
+      }
+      .brand-name { font-size: 12px; line-height: 1.1; font-weight: 800; letter-spacing: 0.22em; }
+      .brand-sub { margin-top: 5px; color: var(--muted); font-size: 10px; letter-spacing: 0.16em; }
+
+      .badge {
+        display: inline-flex; align-items: center; gap: 8px;
+        padding: 8px 11px; border: 1px solid var(--line); border-radius: 999px;
+        background: rgba(6, 13, 23, 0.58); color: #c6d5e4;
+        font-size: 10px; font-weight: 700; letter-spacing: 0.12em;
+        backdrop-filter: blur(12px);
+      }
+      .badge::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: #52db90; box-shadow: 0 0 12px #52db90; }
+
+      .panel {
+        pointer-events: auto;
+        width: min(264px, calc(100vw - 42px));
+        padding: 15px;
+        border: 1px solid var(--line);
+        border-radius: 14px;
+        background: var(--panel);
+        box-shadow: 0 15px 44px rgba(0, 0, 0, 0.26);
+        backdrop-filter: blur(18px);
+      }
+      .panel h2 { margin: 0 0 13px; font-size: 11px; letter-spacing: 0.18em; text-transform: uppercase; color: #b8c9d9; }
+      .specs { display: grid; grid-template-columns: 1fr 1fr; gap: 9px; margin-bottom: 14px; }
+      .spec { padding: 9px 10px; border: 1px solid rgba(180, 205, 226, 0.10); border-radius: 9px; background: rgba(255,255,255,0.025); }
+      .spec b { display: block; color: var(--text); font-size: 14px; letter-spacing: 0.04em; }
+      .spec span { display: block; margin-top: 4px; color: var(--muted); font-size: 9px; letter-spacing: 0.1em; }
+      .actions { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+      button {
+        border: 1px solid rgba(180, 205, 226, 0.16); border-radius: 8px;
+        padding: 9px 10px; color: #c8d6e4; background: rgba(255,255,255,0.045);
+        cursor: pointer; font: inherit; font-size: 10px; font-weight: 700; letter-spacing: 0.08em;
+        transition: border-color .18s ease, background .18s ease, color .18s ease, transform .18s ease;
+      }
+      button:hover { border-color: rgba(102, 215, 237, 0.6); color: #fff; background: rgba(102,215,237,.10); }
+      button:active { transform: translateY(1px); }
+      button.active { border-color: rgba(102, 215, 237, 0.65); color: var(--cyan); background: rgba(102,215,237,.11); }
+      button.primary { grid-column: 1 / -1; color: #101923; border-color: var(--yellow); background: var(--yellow); }
+      button.primary:hover { color: #101923; background: #ffd66d; }
+      .hint { margin-top: 12px; color: var(--muted); font-size: 10px; line-height: 1.55; }
+
+      .bottombar { align-items: flex-end; }
+      .caption { max-width: 400px; color: #9baec1; font-size: 10px; line-height: 1.55; letter-spacing: 0.04em; text-shadow: 0 2px 16px #000; }
+      .caption strong { color: var(--text); font-size: 12px; letter-spacing: 0.14em; }
+      .scale { text-align: right; color: var(--muted); font-size: 10px; letter-spacing: .12em; }
+      .scale b { display: block; margin-bottom: 5px; color: var(--cyan); font-size: 16px; letter-spacing: .08em; }
+
+      #loading {
+        position: fixed; inset: 0; z-index: 10; display: grid; place-items: center;
+        color: #b9cad9; background: #070c14; font-size: 11px; letter-spacing: .18em;
+        transition: opacity .45s ease;
+      }
+      #loading.done { opacity: 0; pointer-events: none; }
+      .loader { display: flex; align-items: center; gap: 12px; }
+      .loader i { width: 8px; height: 8px; border-radius: 50%; background: var(--yellow); animation: pulse 1s infinite alternate; }
+      @keyframes pulse { to { opacity: .25; transform: scale(.6); } }
+
+      @media (max-width: 700px) {
+        .hud { padding: 16px; }
+        .topbar { align-items: center; }
+        .topbar .badge { display: none; }
+        .panel { width: 220px; padding: 12px; }
+        .caption { max-width: 220px; }
+        .scale { display: none; }
+      }
+    </style>
+  </head>
+  <body>
+    <div id="app">
+      <div id="viewport"></div>
+      <div id="loading"><div class="loader"><i></i><span>ASSEMBLING 1:1 MODEL</span></div></div>
+      <div class="hud">
+        <div class="topbar">
+          <div class="brand">
+            <div class="brand-mark">G1</div>
+            <div><div class="brand-name">PRIME ASSEMBLY</div><div class="brand-sub">CYBERTRONIAN ARCHIVE / WEB VIEWER</div></div>
+          </div>
+          <div class="badge">REAL-SCALE SCENE · ONLINE</div>
+        </div>
+
+        <div class="panel">
+          <h2>Model telemetry</h2>
+          <div class="specs">
+            <div class="spec"><b>8.40 m</b><span>HEIGHT / 1:1</span></div>
+            <div class="spec"><b>G1</b><span>DESIGN ERA</span></div>
+            <div class="spec"><b id="partCount">--</b><span>ASSEMBLED PARTS</span></div>
+            <div class="spec"><b>THREE.JS</b><span>RENDER CORE</span></div>
+          </div>
+          <div class="actions">
+            <button class="primary" id="reset">RESET VIEW</button>
+            <button id="autoRotate" class="active">AUTO ROTATE</button>
+            <button id="wireframe">WIREFRAME</button>
+            <button id="grid">GROUND GRID</button>
+            <button id="labels">LABELS</button>
+            <button id="export">EXPORT GLB</button>
+          </div>
+          <div class="hint">拖拽旋转 · 滚轮缩放 · 右键平移<br />手机端单指旋转 · 双指缩放</div>
+        </div>
+
+        <div class="bottombar">
+          <div class="caption"><strong>OPTIMUS PRIME / G1 SILHOUETTE</strong><br />按米制比例搭建的网页展示模型。红蓝车头胸甲、双烟囱、车轮、面罩与黄色头冠均为独立可见部件。</div>
+          <div class="scale"><b>1 UNIT = 1 METRE</b>STUDIO LIGHTING / REV 01</div>
+        </div>
+      </div>
+    </div>
+
+    <script type="importmap">
+      {
+        "imports": {
+          "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+          "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+        }
+      }
+    </script>
+    <script type="module">
+      import * as THREE from 'three';
+      import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+      import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
+      import { GLTFExporter } from 'three/addons/exporters/GLTFExporter.js';
+
+      const viewport = document.getElementById('viewport');
+      const scene = new THREE.Scene();
+      scene.background = new THREE.Color(0x070c14);
+      scene.fog = new THREE.Fog(0x070c14, 17, 34);
+
+      const camera = new THREE.PerspectiveCamera(37, innerWidth / innerHeight, 0.03, 100);
+      const homeCamera = new THREE.Vector3(12.6, 8.7, 15.3);
+      camera.position.copy(homeCamera);
+      camera.lookAt(0, 4.1, 0);
+
+      const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false, preserveDrawingBuffer: true });
+      renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+      renderer.setSize(innerWidth, innerHeight);
+      renderer.shadowMap.enabled = true;
+      renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+      renderer.outputColorSpace = THREE.SRGBColorSpace;
+      renderer.toneMapping = THREE.ACESFilmicToneMapping;
+      renderer.toneMappingExposure = 1.08;
+      viewport.appendChild(renderer.domElement);
+
+      const controls = new OrbitControls(camera, renderer.domElement);
+      controls.target.set(0, 4.05, 0);
+      controls.enableDamping = true;
+      controls.dampingFactor = 0.055;
+      controls.minDistance = 6.0;
+      controls.maxDistance = 27;
+      controls.maxPolarAngle = Math.PI * 0.52;
+      controls.autoRotate = true;
+      controls.autoRotateSpeed = 0.65;
+
+      const colors = {
+        red: 0xb72f2a,
+        redHi: 0xe34b39,
+        redDark: 0x701d22,
+        blue: 0x1b4b82,
+        blueHi: 0x347db0,
+        window: 0x122e4b,
+        yellow: 0xf3bd31,
+        silver: 0xa9b9c1,
+        silverHi: 0xe0e7e5,
+        gunmetal: 0x283746,
+        black: 0x0c1118,
+        rubber: 0x171b20,
+      };
+
+      const materials = {};
+      for (const [key, value] of Object.entries(colors)) {
+        materials[key] = new THREE.MeshStandardMaterial({
+          color: value,
+          roughness: key === 'window' ? 0.22 : key === 'silverHi' ? 0.28 : 0.55,
+          metalness: key === 'rubber' || key === 'black' ? 0.12 : key === 'window' ? 0.52 : 0.68,
+        });
+      }
+      const glass = new THREE.MeshPhysicalMaterial({ color: colors.window, roughness: .14, metalness: .35, clearcoat: 1, clearcoatRoughness: .11 });
+      const emissiveBlue = new THREE.MeshStandardMaterial({ color: 0x75e1ff, emissive: 0x164860, emissiveIntensity: 1.3, metalness: .25, roughness: .28 });
+      materials.emissiveBlue = emissiveBlue;
+
+      const robot = new THREE.Group();
+      robot.name = 'OPTIMUS_PRIME_G1_1_TO_1';
+      scene.add(robot);
+      const detailGroup = new THREE.Group();
+      detailGroup.name = 'G1_DETAIL_LABELS';
+      robot.add(detailGroup);
+      const meshes = [];
+
+      function mat(name) { return materials[name] || name; }
+      function addMesh(mesh, parent = robot, name = '') {
+        mesh.name = name;
+        mesh.castShadow = true;
+        mesh.receiveShadow = true;
+        parent.add(mesh);
+        meshes.push(mesh);
+        return mesh;
+      }
+      function box(name, x, y, z, w, h, d, material, bevel = .045, parent = robot) {
+        const geo = new RoundedBoxGeometry(w, h, d, 3, Math.min(bevel, Math.min(w,h,d) * .22));
+        return addMesh(new THREE.Mesh(geo, mat(material)), parent, name).translateX(x).translateY(y).translateZ(z);
+      }
+      function cyl(name, x, y, z, radius, height, material, rotation = [0, 0, 0], segments = 24, parent = robot) {
+        const geo = new THREE.CylinderGeometry(radius, radius, height, segments);
+        const mesh = addMesh(new THREE.Mesh(geo, mat(material)), parent, name);
+        mesh.position.set(x, y, z); mesh.rotation.set(...rotation); return mesh;
+      }
+      function sphere(name, x, y, z, radius, material, scale = [1,1,1], parent = robot) {
+        const mesh = addMesh(new THREE.Mesh(new THREE.SphereGeometry(radius, 20, 12), mat(material)), parent, name);
+        mesh.position.set(x, y, z); mesh.scale.set(...scale); return mesh;
+      }
+      function torus(name, x, y, z, radius, tube, material, rotation = [Math.PI / 2, 0, 0], parent = robot) {
+        const mesh = addMesh(new THREE.Mesh(new THREE.TorusGeometry(radius, tube, 12, 28), mat(material)), parent, name);
+        mesh.position.set(x, y, z); mesh.rotation.set(...rotation); return mesh;
+      }
+      function line(name, points, material = 0x0b151e, parent = robot) {
+        const geo = new THREE.BufferGeometry().setFromPoints(points.map(p => new THREE.Vector3(...p)));
+        const mesh = addMesh(new THREE.Line(geo, new THREE.LineBasicMaterial({ color: material, transparent: true, opacity: .8 })), parent, name);
+        mesh.castShadow = false; mesh.receiveShadow = false; return mesh;
+      }
+      function wedge(name, x, y, z, w, h, d, material, parent = robot) {
+        // A compact wedge made from a custom six-face prism, used for G1 angular armor.
+        const hw = w / 2, hd = d / 2;
+        const vertices = new Float32Array([
+          -hw,-h/2,-hd, hw,-h/2,-hd, hw,h/2,-hd, -hw,h/2,-hd,
+          -hw,-h/2,hd, hw,-h/2,hd, 0,h/2,hd, 0,h/2,-hd,
+        ]);
+        const indices = [0,1,2, 0,2,3, 4,6,5, 4,7,6, 0,4,5, 0,5,1, 1,5,6, 1,6,2, 2,6,7, 2,7,3, 4,0,3, 4,3,7];
+        const geo = new THREE.BufferGeometry(); geo.setAttribute('position', new THREE.BufferAttribute(vertices, 3)); geo.setIndex(indices); geo.computeVertexNormals();
+        const mesh = addMesh(new THREE.Mesh(geo, mat(material)), parent, name); mesh.position.set(x,y,z); return mesh;
+      }
+
+      // Feet and lower legs: the silhouette is intentionally broad and mechanical.
+      for (const side of [-1, 1]) {
+        const s = side;
+        const label = s < 0 ? 'L' : 'R';
+        box(`${label}_FOOT_RED_ARMOR`, s * .86, .42, .11, 1.48, .62, 1.82, 'redHi', .13);
+        box(`${label}_FOOT_BLUE_TOE`, s * .86, .38, .91, 1.34, .48, .55, 'blue', .10);
+        box(`${label}_ANKLE_BLOCK`, s * .86, .87, .06, .76, .42, .76, 'silver', .10);
+        box(`${label}_SHIN_BLUE`, s * .86, 1.82, .03, 1.08, 1.65, .94, 'blue', .11);
+        box(`${label}_SHIN_RED_STRIPE`, s * .86, 2.38, .53, .68, .62, .10, 'redHi', .025);
+        box(`${label}_SHIN_SILVER_PLATE`, s * .86, 1.66, .55, .72, .34, .11, 'silverHi', .025);
+        box(`${label}_KNEE_RED_ARMOR`, s * .86, 3.02, .04, 1.15, .48, 1.10, 'redHi', .13);
+        cyl(`${label}_KNEE_JOINT`, s * .86, 3.02, .63, .25, .16, 'gunmetal', [Math.PI / 2, 0, 0]);
+        // Side wheels mounted into each lower leg.
+        for (const z of [-.52, .48]) {
+          torus(`${label}_WHEEL_${z}`, s * 1.44, 1.55, z, .43, .15, 'rubber', [0, Math.PI / 2, 0]);
+          cyl(`${label}_WHEEL_HUB_${z}`, s * 1.44, 1.55, z, .16, .08, 'silver', [0, Math.PI / 2, 0], 18);
+        }
+        box(`${label}_THIGH_RED`, s * .86, 3.83, .02, 1.12, 1.42, .96, 'red', .11);
+        box(`${label}_THIGH_INNER`, s * .86, 4.27, .55, .70, .34, .11, 'silver', .025);
+        torus(`${label}_HIP_RING`, s * .86, 4.56, .02, .38, .08, 'gunmetal', [Math.PI / 2,0,0]);
+      }
+
+      // Pelvis / waist.
+      box('WAIST_BLUE_CORE', 0, 4.82, .02, 1.62, .54, .96, 'blue', .09);
+      box('PELVIS_RED_SHELL', 0, 5.14, .02, 2.55, .58, 1.16, 'redHi', .12);
+      box('PELVIS_CENTER_PLATE', 0, 5.17, .64, .62, .34, .14, 'silverHi', .025);
+      box('PELVIS_BELT_DARK', 0, 5.42, .04, 2.18, .17, 1.05, 'redDark', .035);
+      for (const s of [-1,1]) box(`PELVIS_SIDE_${s}`, s * 1.04, 5.16, .05, .44, .54, 1.02, 'redHi', .08);
+
+      // Torso and iconic chest windows.
+      box('TORSO_MAIN_BLUE', 0, 6.20, 0, 2.48, 1.58, 1.18, 'blue', .12);
+      box('TORSO_RED_CHEST_FRAME', 0, 6.77, .02, 2.58, .72, 1.28, 'redHi', .10);
+      box('CHEST_WINDOW_L', -.61, 6.81, .69, .98, .58, .10, 'window', .045);
+      box('CHEST_WINDOW_R', .61, 6.81, .69, .98, .58, .10, 'window', .045);
+      box('CHEST_WINDOW_L_FRAME', -.61, 6.81, .755, 1.08, .68, .035, 'silver', .015);
+      box('CHEST_WINDOW_R_FRAME', .61, 6.81, .755, 1.08, .68, .035, 'silver', .015);
+      box('CHEST_WINDOW_L_INSET', -.61, 6.81, .78, .88, .49, .018, glass, .01);
+      box('CHEST_WINDOW_R_INSET', .61, 6.81, .78, .88, .49, .018, glass, .01);
+      box('CHEST_CENTER_RED', 0, 6.75, .75, .18, .73, .12, 'redHi', .025);
+      box('ABDOMEN_BLUE', 0, 5.88, .57, 1.02, .56, .16, 'blueHi', .03);
+      box('ABDOMEN_GRILLE', 0, 5.88, .68, .64, .18, .05, 'silverHi', .018);
+      for (let i = -2; i <= 2; i++) box(`GRILLE_SLAT_${i}`, i * .12, 5.88, .72, .035, .20, .04, 'gunmetal', .005);
+      box('TORSO_FRONT_BUMPER', 0, 6.15, .65, 1.52, .23, .10, 'silver', .025);
+      for (const s of [-1,1]) box(`TORSO_SIDE_RED_${s}`, s * 1.22, 6.12, .10, .22, 1.12, 1.0, 'red', .055);
+
+      // Arms, shoulder stacks, forearm armor and hands.
+      for (const side of [-1, 1]) {
+        const s = side, l = s < 0 ? 'L' : 'R';
+        sphere(`${l}_SHOULDER_JOINT`, s * 1.57, 6.95, 0, .30, 'gunmetal', [1,1,.8]);
+        box(`${l}_SHOULDER_RED_ARMOR`, s * 1.79, 7.08, .01, .68, .88, 1.18, 'redHi', .13);
+        wedge(`${l}_SHOULDER_BLUE_INSET`, s * 1.80, 7.01, .62, .48, .48, .18, 'blueHi');
+        box(`${l}_BICEP_BLUE`, s * 1.94, 6.32, .01, .58, 1.16, .66, 'blue', .09);
+        cyl(`${l}_ELBOW_JOINT`, s * 1.94, 5.76, .02, .24, .72, 'gunmetal', [Math.PI/2, 0, 0]);
+        box(`${l}_FOREARM_RED`, s * 1.94, 5.28, .02, .72, .95, .86, 'redHi', .12);
+        box(`${l}_FOREARM_BLUE_PANEL`, s * 1.94, 5.35, .48, .40, .52, .11, 'blueHi', .035);
+        box(`${l}_WRIST_SILVER`, s * 1.94, 4.80, .01, .52, .22, .58, 'silver', .06);
+        box(`${l}_HAND_PALM`, s * 1.94, 4.47, .03, .52, .46, .42, 'silverHi', .10);
+        for (let f = -1; f <= 1; f++) box(`${l}_FINGER_${f}`, s * (1.94 + f*.13), 4.15, .22, .10, .42, .16, 'silver', .035);
+        // G1's twin exhaust stacks sit above each shoulder.
+        for (let i = 0; i < 2; i++) {
+          const x = s * (1.58 + i * .27);
+          cyl(`${l}_SMOKESTACK_${i}`, x, 7.89, -.13, .12, 1.36, 'silverHi', [0, 0, 0], 20);
+          cyl(`${l}_SMOKESTACK_CAP_${i}`, x, 8.59, -.13, .16, .10, 'gunmetal', [0, 0, 0], 20);
+        }
+      }
+
+      // Neck, head, face, helmet and antennae.
+      cyl('NECK_JOINT', 0, 7.37, 0, .35, .34, 'gunmetal');
+      box('HEAD_BLUE_HELMET', 0, 7.87, .02, 1.38, .80, 1.08, 'blue', .18);
+      box('HEAD_HELMET_TOP', 0, 8.27, .02, 1.05, .22, .88, 'blueHi', .08);
+      box('FACE_SILVER', 0, 7.75, .59, .70, .51, .22, 'silverHi', .10);
+      box('FACE_MASK', 0, 7.59, .70, .56, .16, .10, 'silver', .035);
+      box('FACE_EYE_BAND', 0, 7.91, .70, .84, .13, .08, 'gunmetal', .025);
+      box('EYE_GLOW', 0, 7.91, .75, .52, .045, .03, 'emissiveBlue', .008);
+      box('HEAD_CREST', 0, 8.53, .10, .18, .38, .18, 'yellow', .035);
+      for (const s of [-1,1]) {
+        box(`EAR_${s}`, s * .74, 7.90, .02, .20, .43, .38, 'silver', .055);
+        box(`EAR_RED_${s}`, s * .77, 7.98, .31, .12, .22, .08, 'redHi', .025);
+        cyl(`ANTENNA_${s}`, s * .46, 8.53, .02, .055, .56, 'yellow', [0, 0, s * .16], 12);
+      }
+
+      // A small, readable Matrix detail nested in the chest.
+      box('MATRIX_HOUSING', 0, 6.30, .68, .36, .34, .10, 'silver', .03);
+      sphere('MATRIX_CORE', 0, 6.30, .76, .09, 'yellow', [1, .78, .38]);
+
+      // Back cab / trailer silhouette, visible while orbiting.
+      box('BACK_CAB_BLUE', 0, 6.52, -.72, 1.95, 1.68, .52, 'blue', .08);
+      box('BACK_CAB_RED_TOP', 0, 7.20, -.80, 1.76, .34, .20, 'redHi', .035);
+      for (const s of [-1,1]) {
+        box(`BACK_CAB_SIDE_${s}`, s * .80, 6.56, -1.04, .28, 1.15, .14, 'red', .03);
+        torus(`BACK_WHEEL_${s}`, s * 1.05, 2.05, -.93, .44, .13, 'rubber', [Math.PI / 2, 0, 0]);
+      }
+
+      // Normalize the assembled geometry to a measured 8.40 m overall height.
+      // The local construction dimensions stay readable above; this final transform
+      // makes the published scene scale explicit and keeps the foot sole at y = 0.
+      const modelHeight = 8.40;
+      const rawHeight = 8.70;
+      const modelScale = modelHeight / rawHeight;
+      robot.scale.setScalar(modelScale);
+      robot.position.y = -0.11 * modelScale;
+
+      // Ground and measurement marker. The model's feet sit exactly at y = 0.
+      const ground = new THREE.Mesh(new THREE.PlaneGeometry(60, 60), new THREE.MeshStandardMaterial({ color: 0x09111b, roughness: .84, metalness: .08 }));
+      ground.rotation.x = -Math.PI / 2; ground.position.y = .02; ground.receiveShadow = true; scene.add(ground);
+      const grid = new THREE.GridHelper(24, 24, 0x28536a, 0x142a3a); grid.position.y = .035; grid.material.transparent = true; grid.material.opacity = .42; scene.add(grid);
+      const axis = new THREE.Group(); axis.name = 'HEIGHT_MARKER'; scene.add(axis);
+      const markerMat = new THREE.LineBasicMaterial({ color: 0x66d7ed, transparent: true, opacity: .6 });
+      const markerGeo = new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(-3.5, .1, -2.2), new THREE.Vector3(-3.5, 8.40, -2.2), new THREE.Vector3(-3.65, 8.40, -2.2), new THREE.Vector3(-3.35, 8.40, -2.2), new THREE.Vector3(-3.5, 8.40, -2.2), new THREE.Vector3(-3.65, .1, -2.2), new THREE.Vector3(-3.35, .1, -2.2)]);
+      axis.add(new THREE.Line(markerGeo, markerMat));
+
+      // Lighting is arranged like a product photography turntable.
+      scene.add(new THREE.HemisphereLight(0xabc9df, 0x111927, 1.65));
+      const key = new THREE.DirectionalLight(0xfff1d3, 4.7); key.position.set(6, 13, 9); key.castShadow = true; key.shadow.mapSize.set(2048, 2048); key.shadow.camera.left = -8; key.shadow.camera.right = 8; key.shadow.camera.top = 14; key.shadow.camera.bottom = -1; scene.add(key);
+      const rim = new THREE.DirectionalLight(0x5aaeea, 3.2); rim.position.set(-8, 8, -10); scene.add(rim);
+      const redFill = new THREE.PointLight(0xdd4a37, 2.8, 13); redFill.position.set(-6, 4, 4); scene.add(redFill);
+      const blueFill = new THREE.PointLight(0x3da8df, 2.5, 15); blueFill.position.set(6, 6, -3); scene.add(blueFill);
+
+      // Labels are intentionally simple 3D sprites so they stay in the scene while orbiting.
+      function label(text, position, color = '#9deaff') {
+        const canvas = document.createElement('canvas'); canvas.width = 512; canvas.height = 96;
+        const ctx = canvas.getContext('2d'); ctx.font = '700 28px Inter, sans-serif'; ctx.fillStyle = color; ctx.fillText(text, 12, 40);
+        ctx.strokeStyle = 'rgba(140,220,240,.45)'; ctx.beginPath(); ctx.moveTo(0, 60); ctx.lineTo(420,60); ctx.stroke();
+        const sprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: new THREE.CanvasTexture(canvas), transparent: true, depthTest: false }));
+        sprite.scale.set(2.05, .39, 1); sprite.position.set(...position); sprite.visible = false; detailGroup.add(sprite); return sprite;
+      }
+      const labels = [
+        label('CHEST WINDOWS / G1 CAB', [-2.0, 6.88, .95]),
+        label('MATRIX CORE', [1.35, 6.28, .85], '#ffd86b'),
+        label('REAL-SCALE HEIGHT / 8.40 m', [-2.2, 8.55, -.6], '#66d7ed'),
+      ];
+
+      document.getElementById('partCount').textContent = String(meshes.length).padStart(2, '0');
+      const loading = document.getElementById('loading');
+      requestAnimationFrame(() => loading.classList.add('done'));
+
+      function setButton(id, active) { document.getElementById(id).classList.toggle('active', active); }
+      document.getElementById('reset').addEventListener('click', () => {
+        camera.position.copy(homeCamera); controls.target.set(0, 4.05, 0); controls.update();
+      });
+      document.getElementById('autoRotate').addEventListener('click', e => { controls.autoRotate = !controls.autoRotate; setButton('autoRotate', controls.autoRotate); });
+      document.getElementById('grid').addEventListener('click', e => { grid.visible = !grid.visible; setButton('grid', grid.visible); });
+      document.getElementById('labels').addEventListener('click', e => { const visible = !labels[0].visible; labels.forEach(x => x.visible = visible); setButton('labels', visible); });
+      document.getElementById('wireframe').addEventListener('click', e => {
+        const enabled = !e.currentTarget.classList.contains('active'); setButton('wireframe', enabled);
+        meshes.forEach(m => { if (m.material && 'wireframe' in m.material) m.material.wireframe = enabled; });
+      });
+      document.getElementById('export').addEventListener('click', () => {
+        const exporter = new GLTFExporter();
+        exporter.parse(robot, result => {
+          const blob = new Blob([result], { type: 'model/gltf-binary' });
+          const link = document.createElement('a'); link.href = URL.createObjectURL(blob); link.download = 'optimus-prime-g1-1to1.glb'; link.click();
+          setTimeout(() => URL.revokeObjectURL(link.href), 1000);
+        }, err => console.error(err), { binary: true, trs: false, onlyVisible: true });
+      });
+
+      addEventListener('resize', () => { camera.aspect = innerWidth / innerHeight; camera.updateProjectionMatrix(); renderer.setSize(innerWidth, innerHeight); });
+      const clock = new THREE.Clock();
+      function animate() {
+        requestAnimationFrame(animate);
+        const t = clock.getElapsedTime();
+        // Subtle breathing-like light motion keeps the product shot alive without moving the model.
+        blueFill.intensity = 2.5 + Math.sin(t * .75) * .22;
+        controls.update(); renderer.render(scene, camera);
+      }
+      animate();
+    </script>
+  </body>
+</html>
